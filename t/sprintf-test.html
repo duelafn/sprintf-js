@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+    Copyright (C) 2014  Dean Serenevy
+    This work is licensed under a Creative Commons Attribution 4.0 International License.
+  -->
+<head>
+  <title>Sprintf Test Suite</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+  <script src="../src/sprintf.js"></script>
+
+<style type="text/css">
+<!--/*--><![CDATA[/*><!--*/
+    .pass     { background: #b6d9b2; }
+    .fail     { background: #e4a39d; }
+    .summary  { background: #fffc73; }
+    .skip     { font-style: italic; background: #d7dbfe; }
+    .error    { font-weight: bold; }
+    .expected { font-size: smaller; }
+    .result   { font-size: smaller; }
+    .comment  { font-size: smaller; }
+/*]]>*/-->
+</style>
+
+<script type="text/javascript">
+//<![CDATA[
+
+var sprintf = Sprintf.sprintf.bind(Sprintf);
+
+
+var SprintfApp = (function($) {
+
+    return {
+
+        /* run(tests): Run the app */
+        "run": function(tests) {
+            var app = this;
+            var table = $("#sprintf-results");
+
+            var nr_tests = 0;
+            var nr_pass  = 0;
+            var nr_fail  = 0;
+            var nr_skip  = 0;
+            var row_num  = 0;
+
+            $.each(tests, function() {
+                row_num++;
+                var h_tr       = $('<tr><td class="testnum">' + row_num + '.</td></tr>\x0A');
+                var h_format   = $('<td class="format"></td>');
+                var h_args     = $('<td class="args"></td>');
+                var h_expected = $('<td class="expected"></td>');
+                var h_result   = $('<td class="result"></td>');
+                var h_comment  = $('<td class="comment"></td>');
+                var h_error    = $('<td class="error"></td>');
+
+                if (this.skip) {
+                    h_tr.addClass("skip"); nr_skip++;
+                } else {
+                    nr_tests++;
+                }
+
+                h_format.text(this.format);
+                h_args.text(this.args.toString());
+                h_expected.text(this.expected);
+                h_comment.text(this.comment);
+
+                h_tr.append(h_format, h_args, h_expected, h_result, h_comment, h_error);
+                table.append(h_tr);
+
+                try {
+                    this.result = sprintf(this.format, this.args);
+                    h_result.text(this.result);
+                    if (!this.skip) {
+                        if (this.result == this.expected) {
+                            h_tr.addClass("pass"); nr_pass++;
+                        } else {
+                            h_tr.addClass("fail"); nr_fail++;
+                        }
+                    }
+                }
+                catch (err) {
+                    h_error.text(err.toString());
+                    if (!this.skip) {
+                        if      (err.match && err.match(/^Invalid/) && this.expected.match(/ INVALID/)) { h_tr.addClass("pass"); nr_pass++; }
+                        else if (err.match && err.match(/^Missing/) && this.expected.match(/ MISSING/)) { h_tr.addClass("pass"); nr_pass++; }
+                        else {
+                            h_tr.addClass("fail"); nr_fail++;
+                        }
+                    }
+                }
+                finally {
+                    if (this.skip) {
+                        var text = 'SKIP: ' + this.skip;
+                        if (h_error.text()) { text = text + ' (Our Error: ' + h_error.text() + ')'; }
+                        h_error.text(text);
+                    }
+                }
+            });
+
+            var report = sprintf(
+                '%d of %d tests (%.2f%%) passed, %d skipped, %d failed',
+                nr_pass, nr_tests, 100*(nr_pass)/nr_tests, nr_skip, nr_fail
+            );
+
+            if (nr_pass + nr_fail == nr_tests) {
+                table.prepend('<tr><td class="summary" colspan="7"><b>'+report+'</b></td></tr>');
+            } else {
+                table.prepend('<tr><td class="fail" colspan="7"><b>ERROR in test counts! '+report+'</b></td></tr>');
+            }
+        },
+
+    };
+}(jQuery));
+
+//]]>
+</script>
+
+<script type="text/javascript">
+//<![CDATA[
+  $(function() {
+      var bigNum = Math.pow(2,32) - 1
+
+      SprintfApp.run([
+          // A few special tests of string vs int vs float that perl doesn't worry about
+          { 'format': '%d', 'args': ["123456.789"], 'expected': '123456', 'comment': '' },
+          { 'format': '%d', 'args': ["-123456.789"], 'expected': '-123456', 'comment': '' },
+          { 'format': '%d', 'args': ["0"], 'expected': '0', 'comment': '' },
+          { 'format': '%d', 'args': ["1"], 'expected': '1', 'comment': '' },
+          { 'format': '%d', 'args': ["-1"], 'expected': '-1', 'comment': '' },
+
+          // Tests taken from perl 5.20.0:  t/op/sprintf.t
+          { 'format': '%6. 6s', 'args': [''], 'expected': '%6. 6s INVALID', 'comment': '>(See use of $w in code above)<' },
+          { 'format': '%6 .6s', 'args': [''], 'expected': '%6 .6s INVALID', 'comment': '' },
+          { 'format': '%6.6 s', 'args': [''], 'expected': '%6.6 s INVALID', 'comment': '' },
+          { 'format': '%A', 'args': [''], 'expected': '%A INVALID', 'comment': '' },
+          { 'format': '%B', 'args': [bigNum], 'expected': '11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%+B', 'args': [bigNum], 'expected': '11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%#B', 'args': [bigNum], 'expected': '0B11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%C', 'args': [''], 'expected': '%C INVALID', 'comment': '' },
+          { skip: 'unsupported "backward" comatability', 'format': '%D', 'args': [0x7fffffff], 'expected': '2147483647', 'comment': '>Synonym for %ld<' },
+          { 'format': '%E', 'args': [123456.789], 'expected': '1.234568E+05', 'comment': '>Like %e, but using upper-case "E"<' },
+          { skip: 'unsupported "backward" comatability', 'format': '%F', 'args': [123456.789], 'expected': '123456.789000', 'comment': '>Synonym for %f<' },
+          { 'format': '%G', 'args': [1234567.89], 'expected': '1.23457E+06', 'comment': '>Like %g, but using upper-case "E"<' },
+          { 'format': '%G', 'args': [1234567e96], 'expected': '1.23457E+102', 'comment': '' },
+          { 'format': '%G', 'args': [.1234567e-101], 'expected': '1.23457E-102', 'comment': '' },
+          { 'format': '%G', 'args': [12345.6789], 'expected': '12345.7', 'comment': '' },
+          { 'format': '%G', 'args': [1234567e96], 'expected': '1.23457E+102', 'comment': '>exponent too big skip: os390<' },
+          { 'format': '%G', 'args': [.1234567e-101], 'expected': '1.23457E-102', 'comment': '>exponent too small skip: os390<' },
+          { 'format': '%H', 'args': [''], 'expected': '%H INVALID', 'comment': '' },
+          { 'format': '%I', 'args': [''], 'expected': '%I INVALID', 'comment': '' },
+          { 'format': '%J', 'args': [''], 'expected': '%J INVALID', 'comment': '' },
+          { 'format': '%K', 'args': [''], 'expected': '%K INVALID', 'comment': '' },
+          { 'format': '%L', 'args': [''], 'expected': '%L INVALID', 'comment': '' },
+          { 'format': '%M', 'args': [''], 'expected': '%M INVALID', 'comment': '' },
+          { 'format': '%N', 'args': [''], 'expected': '%N INVALID', 'comment': '' },
+          { skip: 'unsupported "backward" comatability', 'format': '%O', 'args': [bigNum], 'expected': '37777777777', 'comment': '>Synonym for %lo<' },
+          { 'format': '%P', 'args': [''], 'expected': '%P INVALID', 'comment': '' },
+          { 'format': '%Q', 'args': [''], 'expected': '%Q INVALID', 'comment': '' },
+          { 'format': '%R', 'args': [''], 'expected': '%R INVALID', 'comment': '' },
+          { 'format': '%S', 'args': [''], 'expected': '%S INVALID', 'comment': '' },
+          { 'format': '%T', 'args': [''], 'expected': '%T INVALID', 'comment': '' },
+          { skip: 'unsupported "backward" comatability', 'format': '%U', 'args': [bigNum], 'expected': '4294967295', 'comment': '>Synonym for %lu<' },
+          { 'format': '%V', 'args': [''], 'expected': '%V INVALID', 'comment': '' },
+          { 'format': '%W', 'args': [''], 'expected': '%W INVALID', 'comment': '' },
+          { 'format': '%X', 'args': [bigNum], 'expected': 'FFFFFFFF', 'comment': '>Like %x, but with u/c letters<' },
+          { 'format': '%#X', 'args': [bigNum], 'expected': '0XFFFFFFFF', 'comment': '' },
+          { 'format': '%Y', 'args': [''], 'expected': '%Y INVALID', 'comment': '' },
+          { 'format': '%Z', 'args': [''], 'expected': '%Z INVALID', 'comment': '' },
+          { 'format': '%a', 'args': [''], 'expected': '%a INVALID', 'comment': '' },
+          { 'format': '%b', 'args': [bigNum], 'expected': '11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%+b', 'args': [bigNum], 'expected': '11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%#b', 'args': [bigNum], 'expected': '0b11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%34b', 'args': [bigNum], 'expected': '  11111111111111111111111111111111', 'comment': '' },
+          { 'format': '%034b', 'args': [bigNum], 'expected': '0011111111111111111111111111111111', 'comment': '' },
+          { 'format': '%-34b', 'args': [bigNum], 'expected': '11111111111111111111111111111111  ', 'comment': '' },
+          { 'format': '%-034b', 'args': [bigNum], 'expected': '11111111111111111111111111111111  ', 'comment': '' },
+          { 'format': '%6b', 'args': [12], 'expected': '  1100', 'comment': '' },
+          { 'format': '%6.5b', 'args': [12], 'expected': ' 01100', 'comment': '' },
+          { 'format': '%-6.5b', 'args': [12], 'expected': '01100 ', 'comment': '' },
+          { 'format': '%+6.5b', 'args': [12], 'expected': ' 01100', 'comment': '' },
+          { 'format': '% 6.5b', 'args': [12], 'expected': ' 01100', 'comment': '' },
+          { 'format': '%06.5b', 'args': [12], 'expected': ' 01100', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%.5b', 'args': [12], 'expected': '01100', 'comment': '' },
+          { 'format': '%.0b', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%+.0b', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '% .0b', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%-.0b', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#.0b', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#3.0b', 'args': [0], 'expected': '   ', 'comment': '' },
+          { 'format': '%#3.1b', 'args': [0], 'expected': '  0', 'comment': '' },
+          { 'format': '%#3.2b', 'args': [0], 'expected': ' 00', 'comment': '' },
+          { 'format': '%#3.3b', 'args': [0], 'expected': '000', 'comment': '' },
+          { 'format': '%#3.4b', 'args': [0], 'expected': '0000', 'comment': '' },
+          { 'format': '%.0b', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%+.0b', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '% .0b', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%-.0b', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%#.0b', 'args': [1], 'expected': '0b1', 'comment': '' },
+          { 'format': '%#3.0b', 'args': [1], 'expected': '0b1', 'comment': '' },
+          { 'format': '%#3.1b', 'args': [1], 'expected': '0b1', 'comment': '' },
+          { 'format': '%#3.2b', 'args': [1], 'expected': '0b01', 'comment': '' },
+          { 'format': '%#3.3b', 'args': [1], 'expected': '0b001', 'comment': '' },
+          { 'format': '%#3.4b', 'args': [1], 'expected': '0b0001', 'comment': '' },
+          { 'format': '%c', 'args': [65], 'expected': 'A', 'comment': '' },
+          { 'format': '%10c', 'args': [65], 'expected': '         A', 'comment': '' },
+          { 'format': '%#10c', 'args': [65], 'expected': '         A', 'comment': '># modifier: no effect<' },
+          { 'format': '%010c', 'args': [65], 'expected': '000000000A', 'comment': '' },
+          { skip: 'size modifiers are not supported', 'format': '%10lc', 'args': [65], 'expected': '         A', 'comment': '>l modifier: no effect<' },
+          { skip: 'size modifiers are not supported', 'format': '%10hc', 'args': [65], 'expected': '         A', 'comment': '>h modifier: no effect<' },
+          { 'format': '%10.5c', 'args': [65], 'expected': '         A', 'comment': '>precision: no effect<' },
+          { 'format': '%-10c', 'args': [65], 'expected': 'A         ', 'comment': '' },
+          { 'format': '%d', 'args': [123456.789], 'expected': '123456', 'comment': '' },
+          { 'format': '%d', 'args': [-123456.789], 'expected': '-123456', 'comment': '' },
+          { 'format': '%d', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%-d', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%+d', 'args': [0], 'expected': '+0', 'comment': '' },
+          { 'format': '% d', 'args': [0], 'expected': ' 0', 'comment': '' },
+          { 'format': '%0d', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%-3d', 'args': [1], 'expected': '1  ', 'comment': '' },
+          { 'format': '%+3d', 'args': [1], 'expected': ' +1', 'comment': '' },
+          { 'format': '% 3d', 'args': [1], 'expected': '  1', 'comment': '' },
+          { 'format': '%03d', 'args': [1], 'expected': '001', 'comment': '' },
+          { 'format': '%+ 3d', 'args': [1], 'expected': ' +1', 'comment': '' },
+          { 'format': '% +3d', 'args': [1], 'expected': ' +1', 'comment': '' },
+          { 'format': '%.0d', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%+.0d', 'args': [0], 'expected': '+', 'comment': '' },
+          { 'format': '% .0d', 'args': [0], 'expected': ' ', 'comment': '' },
+          { 'format': '%-.0d', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#.0d', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%.0d', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%d', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%+d', 'args': [1], 'expected': '+1', 'comment': '' },
+          { 'format': '%#3.2d', 'args': [1], 'expected': ' 01', 'comment': '># modifier: no effect<' },
+          { 'format': '%3.2d', 'args': [1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%03.2d', 'args': [1], 'expected': ' 01', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%-3.2d', 'args': [1], 'expected': '01 ', 'comment': '' },
+          { 'format': '%+3.2d', 'args': [1], 'expected': '+01', 'comment': '' },
+          { 'format': '% 3.2d', 'args': [1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%-03.2d', 'args': [1], 'expected': '01 ', 'comment': '>zero pad + left just.: no effect<' },
+          { 'format': '%3.*d', 'args': [2,1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%3.*d', 'args': [1,1], 'expected': '  1', 'comment': '' },
+          { 'format': '%3.*d', 'args': [0,1], 'expected': '  1', 'comment': '' },
+          { 'format': '%3.*d', 'args': [-1,1], 'expected': '  1', 'comment': '' },
+          { 'format': '%.*d', 'args': [0,0], 'expected': '', 'comment': '' },
+          { 'format': '%-.*d', 'args': [0,0], 'expected': '', 'comment': '' },
+          { 'format': '%+.*d', 'args': [0,0], 'expected': '+', 'comment': '' },
+          { 'format': '% .*d', 'args': [0,0], 'expected': ' ', 'comment': '' },
+          { 'format': '%0.*d', 'args': [0,0], 'expected': '', 'comment': '' },
+          { 'format': '%.*d', 'args': [-2,0], 'expected': '0', 'comment': '' },
+          { 'format': '%-.*d', 'args': [-2,0], 'expected': '0', 'comment': '' },
+          { 'format': '%+.*d', 'args': [-2,0], 'expected': '+0', 'comment': '' },
+          { 'format': '% .*d', 'args': [-2,0], 'expected': ' 0', 'comment': '' },
+          { 'format': '%0.*d', 'args': [-2,0], 'expected': '0', 'comment': '' },
+          { 'format': '%d', 'args': [-1], 'expected': '-1', 'comment': '' },
+          { 'format': '%-d', 'args': [-1], 'expected': '-1', 'comment': '' },
+          { 'format': '%+d', 'args': [-1], 'expected': '-1', 'comment': '' },
+          { 'format': '% d', 'args': [-1], 'expected': '-1', 'comment': '' },
+          { 'format': '%-3d', 'args': [-1], 'expected': '-1 ', 'comment': '' },
+          { 'format': '%+3d', 'args': [-1], 'expected': ' -1', 'comment': '' },
+          { 'format': '% 3d', 'args': [-1], 'expected': ' -1', 'comment': '' },
+          { 'format': '%03d', 'args': [-1], 'expected': '-01', 'comment': '' },
+          { skip: 'size modifiers are not supported', 'format': '%hd', 'args': [1], 'expected': '1', 'comment': '>More extensive testing of<' },
+          { skip: 'size modifiers are not supported', 'format': '%hhd', 'args': [1], 'expected': '1', 'comment': '>length modifiers would be<' },
+          { skip: 'size modifiers are not supported', 'format': '%ld', 'args': [1], 'expected': '1', 'comment': '>platform-specific<' },
+          { skip: 'size modifiers are not supported', 'format': '%Vd', 'args': [1], 'expected': '1', 'comment': '' },
+          { skip: 'size modifiers are not supported', 'format': '%zd', 'args': [1], 'expected': '1', 'comment': '' },
+          { skip: 'size modifiers are not supported', 'format': '%td', 'args': [1], 'expected': '1', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%vd', 'args': [String.fromCharCode(1)], 'expected': '1', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%+vd', 'args': [String.fromCharCode(1)], 'expected': '+1', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%#vd', 'args': [String.fromCharCode(1)], 'expected': '1', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%vd', 'args': ["\01\02\03"], 'expected': '1.2.3', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%v.3d', 'args': ["\01\02\03"], 'expected': '001.002.003', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%0v3d', 'args': ["\01\02\03"], 'expected': '001.002.003', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%-v3d', 'args': ["\01\02\03"], 'expected': '1  .2  .3  ', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%+-v3d', 'args': ["\01\02\03"], 'expected': '+1 .2  .3  ', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%v4.3d', 'args': ["\01\02\03"], 'expected': ' 001. 002. 003', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%0v4.3d', 'args': ["\01\02\03"], 'expected': ' 001. 002. 003', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%0*v2d', 'args': ['-', "\0\7\14"], 'expected': '00-07-12', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%v.*d', 'args': [3, "\01\02\03"], 'expected': '001.002.003', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%0v*d', 'args': [3, "\01\02\03"], 'expected': '001.002.003', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%-v*d', 'args': [3, "\01\02\03"], 'expected': '1  .2  .3  ', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%+-v*d', 'args': [3, "\01\02\03"], 'expected': '+1 .2  .3  ', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%v*.*d', 'args': [4, 3, "\01\02\03"], 'expected': ' 001. 002. 003', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%0v*.*d', 'args': [4, 3, "\01\02\03"], 'expected': ' 001. 002. 003', 'comment': '>cf perl #83194<' },
+          { skip: 'vector flag not supported', 'format': '%0*v*d', 'args': ['-', 2, "\0\7\13"], 'expected': '00-07-11', 'comment': '>cf perl #83194<' },
+          { 'format': '%e', 'args': [1234.875], 'expected': '1.234875e+03', 'comment': '' },
+          { 'format': '%e', 'args': [0.000012345], 'expected': '1.234500e-05', 'comment': '' },
+          { 'format': '%e', 'args': [1234567E96], 'expected': '1.234567e+102', 'comment': '' },
+          { 'format': '%e', 'args': [0], 'expected': '0.000000e+00', 'comment': '' },
+          { 'format': '%e', 'args': [.1234567E-101], 'expected': '1.234567e-102', 'comment': '' },
+          { 'format': '%+e', 'args': [1234.875], 'expected': '+1.234875e+03', 'comment': '' },
+          { 'format': '%#e', 'args': [1234.875], 'expected': '1.234875e+03', 'comment': '' },
+          { 'format': '%e', 'args': [-1234.875], 'expected': '-1.234875e+03', 'comment': '' },
+          { 'format': '%+e', 'args': [-1234.875], 'expected': '-1.234875e+03', 'comment': '' },
+          { 'format': '%#e', 'args': [-1234.875], 'expected': '-1.234875e+03', 'comment': '' },
+          { 'format': '%.0e', 'args': [1234.875], 'expected': '1e+03', 'comment': '' },
+          { skip: 'not supporting this', 'format': '%#.0e', 'args': [1234.875], 'expected': '1.e+03', 'comment': '' },
+          { 'format': '%.0e', 'args': [1.875], 'expected': '2e+00', 'comment': '' },
+          { 'format': '%.0e', 'args': [0.875], 'expected': '9e-01', 'comment': '' },
+          { 'format': '%.*e', 'args': [0, 1234.875], 'expected': '1e+03', 'comment': '' },
+          { 'format': '%.1e', 'args': [1234.875], 'expected': '1.2e+03', 'comment': '' },
+          { 'format': '%-12.4e', 'args': [1234.875], 'expected': '1.2349e+03  ', 'comment': '' },
+          { 'format': '%12.4e', 'args': [1234.875], 'expected': '  1.2349e+03', 'comment': '' },
+          { 'format': '%+-12.4e', 'args': [1234.875], 'expected': '+1.2349e+03 ', 'comment': '' },
+          { 'format': '%+12.4e', 'args': [1234.875], 'expected': ' +1.2349e+03', 'comment': '' },
+          { 'format': '%+-12.4e', 'args': [-1234.875], 'expected': '-1.2349e+03 ', 'comment': '' },
+          { 'format': '%+12.4e', 'args': [-1234.875], 'expected': ' -1.2349e+03', 'comment': '' },
+          { 'format': '%e', 'args': [1234567E96], 'expected': '1.234567e+102', 'comment': '>exponent too big skip: os390<' },
+          { 'format': '%e', 'args': [.1234567E-101], 'expected': '1.234567e-102', 'comment': '>exponent too small skip: os390<' },
+          { 'format': '%f', 'args': [1234.875], 'expected': '1234.875000', 'comment': '' },
+          { 'format': '%+f', 'args': [1234.875], 'expected': '+1234.875000', 'comment': '' },
+          { 'format': '%#f', 'args': [1234.875], 'expected': '1234.875000', 'comment': '' },
+          { 'format': '%f', 'args': [-1234.875], 'expected': '-1234.875000', 'comment': '' },
+          { 'format': '%+f', 'args': [-1234.875], 'expected': '-1234.875000', 'comment': '' },
+          { 'format': '%#f', 'args': [-1234.875], 'expected': '-1234.875000', 'comment': '' },
+          { 'format': '%6f', 'args': [1234.875], 'expected': '1234.875000', 'comment': '' },
+          { 'format': '%*f', 'args': [6, 1234.875], 'expected': '1234.875000', 'comment': '' },
+          { 'format': '%.0f', 'args': [-0.1], 'expected': '-0', 'comment': '>C library bug: no minus skip: VMS<' },
+          { 'format': '%.0f', 'args': [1234.875], 'expected': '1235', 'comment': '' },
+          { 'format': '%.1f', 'args': [1234.875], 'expected': '1234.9', 'comment': '' },
+          { 'format': '%-8.1f', 'args': [1234.875], 'expected': '1234.9  ', 'comment': '' },
+          { 'format': '%8.1f', 'args': [1234.875], 'expected': '  1234.9', 'comment': '' },
+          { 'format': '%+-8.1f', 'args': [1234.875], 'expected': '+1234.9 ', 'comment': '' },
+          { 'format': '%+8.1f', 'args': [1234.875], 'expected': ' +1234.9', 'comment': '' },
+          { 'format': '%+-8.1f', 'args': [-1234.875], 'expected': '-1234.9 ', 'comment': '' },
+          { 'format': '%+8.1f', 'args': [-1234.875], 'expected': ' -1234.9', 'comment': '' },
+          { 'format': '%*.*f', 'args': [5, 2, 12.3456], 'expected': '12.35', 'comment': '' },
+          { 'format': '%f', 'args': [0], 'expected': '0.000000', 'comment': '' },
+          { 'format': '%.0f', 'args': [], 'expected': '0 MISSING', 'comment': '' },
+          { 'format': ' %.0f', 'args': [], 'expected': ' 0 MISSING', 'comment': '' },
+          { 'format': '%.2f', 'args': [], 'expected': '0.00 MISSING', 'comment': '' },
+          { 'format': '%.2fC', 'args': [], 'expected': '0.00C MISSING', 'comment': '' },
+          { 'format': '%.0f', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%.0f', 'args': [Math.pow(2,38)], 'expected': '274877906944', 'comment': ">Should have exact int'l rep'n<" },
+          { 'format': '%.0f', 'args': [0.1], 'expected': '0', 'comment': '' },
+          { 'format': '%.0f', 'args': [0.6], 'expected': '1', 'comment': '>Known to fail with (irix|nonstop-ux|powerux); -DHAS_LDBL_SPRINTF_BUG may fix<' },
+          { 'format': '%.0f', 'args': [-0.6], 'expected': '-1', 'comment': '>Known to fail with (irix|nonstop-ux|powerux); -DHAS_LDBL_SPRINTF_BUG may fix<' },
+          { 'format': '%.0f', 'args': [1.6], 'expected': '2', 'comment': '' },
+          { 'format': '%.0f', 'args': [-1.6], 'expected': '-2', 'comment': '' },
+          { 'format': '%.0f', 'args': [1], 'expected': '1', 'comment': '' },
+          { skip: 'not supporting this', 'format': '%#.0f', 'args': [1], 'expected': '1.', 'comment': '' },
+          { skip: 'size modifiers are not supported', 'format': '%.0lf', 'args': [1], 'expected': '1', 'comment': ">'l' should have no effect<" },
+          { skip: 'size modifiers are not supported', 'format': '%.0hf', 'args': [1], 'expected': '%.0hf INVALID', 'comment': ">'h' should be rejected<" },
+          { 'format': '%g', 'args': [12345.6789], 'expected': '12345.7', 'comment': '' },
+          { 'format': '%+g', 'args': [12345.6789], 'expected': '+12345.7', 'comment': '' },
+          { 'format': '%#g', 'args': [12345.6789], 'expected': '12345.7', 'comment': '' },
+          { 'format': '%.0g', 'args': [], 'expected': '0 MISSING', 'comment': '' },
+          { 'format': ' %.0g', 'args': [], 'expected': ' 0 MISSING', 'comment': '' },
+          { 'format': '%.2g', 'args': [], 'expected': '0 MISSING', 'comment': '' },
+          { 'format': '%.2gC', 'args': [], 'expected': '0C MISSING', 'comment': '' },
+          { skip: 'not supporting this', 'format': '%.0g', 'args': [-0.0], 'expected': '-0', 'comment': '>C99 standard mandates minus sign but C89 does not skip: MSWin32 VMS hpux:10.20 openbsd netbsd:1.5 irix darwin freebsd:4.9 android<' },
+          { 'format': '%.0g', 'args': [12345.6789], 'expected': '1e+04', 'comment': '' },
+          { skip: 'not supporting this', 'format': '%#.0g', 'args': [12345.6789], 'expected': '1.e+04', 'comment': '' },
+          { 'format': '%.2g', 'args': [12345.6789], 'expected': '1.2e+04', 'comment': '' },
+          { 'format': '%.*g', 'args': [2, 12345.6789], 'expected': '1.2e+04', 'comment': '' },
+          { 'format': '%.9g', 'args': [12345.6789], 'expected': '12345.6789', 'comment': '' },
+          { 'format': '%12.9g', 'args': [12345.6789], 'expected': '  12345.6789', 'comment': '' },
+          { 'format': '%012.9g', 'args': [12345.6789], 'expected': '0012345.6789', 'comment': '' },
+          { 'format': '%-12.9g', 'args': [12345.6789], 'expected': '12345.6789  ', 'comment': '' },
+          { 'format': '%*.*g', 'args': [-12, 9, 12345.6789], 'expected': '12345.6789  ', 'comment': '' },
+          { 'format': '%-012.9g', 'args': [12345.6789], 'expected': '12345.6789  ', 'comment': '' },
+          { 'format': '%g', 'args': [-12345.6789], 'expected': '-12345.7', 'comment': '' },
+          { 'format': '%+g', 'args': [-12345.6789], 'expected': '-12345.7', 'comment': '' },
+          { 'format': '%g', 'args': [1234567.89], 'expected': '1.23457e+06', 'comment': '' },
+          { 'format': '%+g', 'args': [1234567.89], 'expected': '+1.23457e+06', 'comment': '' },
+          { 'format': '%#g', 'args': [1234567.89], 'expected': '1.23457e+06', 'comment': '' },
+          { 'format': '%g', 'args': [-1234567.89], 'expected': '-1.23457e+06', 'comment': '' },
+          { 'format': '%+g', 'args': [-1234567.89], 'expected': '-1.23457e+06', 'comment': '' },
+          { 'format': '%#g', 'args': [-1234567.89], 'expected': '-1.23457e+06', 'comment': '' },
+          { 'format': '%g', 'args': [0.00012345], 'expected': '0.00012345', 'comment': '' },
+          { skip: 'perl/JS disagree on where this splits', 'format': '%g', 'args': [0.000012345], 'expected': '1.2345e-05', 'comment': '' },
+          { 'format': '%g', 'args': [0.00000012345], 'expected': '1.2345e-07', 'comment': '' },
+          { 'format': '%g', 'args': [1234567E96], 'expected': '1.23457e+102', 'comment': '' },
+          { 'format': '%g', 'args': [.1234567E-101], 'expected': '1.23457e-102', 'comment': '' },
+          { 'format': '%g', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%13g', 'args': [1234567.89], 'expected': '  1.23457e+06', 'comment': '' },
+          { 'format': '%+13g', 'args': [1234567.89], 'expected': ' +1.23457e+06', 'comment': '' },
+          { 'format': '%013g', 'args': [1234567.89], 'expected': '001.23457e+06', 'comment': '' },
+          { 'format': '%-13g', 'args': [1234567.89], 'expected': '1.23457e+06  ', 'comment': '' },
+          { 'format': '%g', 'args': [.1234567E-101], 'expected': '1.23457e-102', 'comment': '>exponent too small skip: os390<' },
+          { 'format': '%g', 'args': [1234567E96], 'expected': '1.23457e+102', 'comment': '>exponent too big skip: os390<' },
+          { 'format': '%h', 'args': [''], 'expected': '%h INVALID', 'comment': '' },
+          { skip: 'unsupported "backward" comatability', 'format': '%i', 'args': [123456.789], 'expected': '123456', 'comment': '>Synonym for %d<' },
+          { 'format': '%j', 'args': [''], 'expected': '%j INVALID', 'comment': '' },
+          { 'format': '%k', 'args': [''], 'expected': '%k INVALID', 'comment': '' },
+          { 'format': '%l', 'args': [''], 'expected': '%l INVALID', 'comment': '' },
+          { 'format': '%m', 'args': [''], 'expected': '%m INVALID', 'comment': '' },
+          { 'format': '%o', 'args': [bigNum], 'expected': '37777777777', 'comment': '' },
+          { 'format': '%+o', 'args': [bigNum], 'expected': '37777777777', 'comment': '' },
+          { 'format': '%#o', 'args': [bigNum], 'expected': '037777777777', 'comment': '' },
+          { 'format': '%o', 'args': [642], 'expected': '1202', 'comment': '>check smaller octals across platforms<' },
+          { 'format': '%+o', 'args': [642], 'expected': '1202', 'comment': '' },
+          { 'format': '% o', 'args': [642], 'expected': '1202', 'comment': '' },
+          { 'format': '%#o', 'args': [642], 'expected': '01202', 'comment': '' },
+          { 'format': '%4o', 'args': [18], 'expected': '  22', 'comment': '' },
+          { 'format': '%4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '%-4.3o', 'args': [18], 'expected': '022 ', 'comment': '' },
+          { 'format': '%+4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '% 4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '%04.3o', 'args': [18], 'expected': ' 022', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%4.o', 'args': [36], 'expected': '  44', 'comment': '' },
+          { 'format': '%-4.o', 'args': [36], 'expected': '44  ', 'comment': '' },
+          { 'format': '%+4.o', 'args': [36], 'expected': '  44', 'comment': '' },
+          { 'format': '% 4.o', 'args': [36], 'expected': '  44', 'comment': '' },
+          { 'format': '%04.o', 'args': [36], 'expected': '  44', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%.3o', 'args': [18], 'expected': '022', 'comment': '' },
+          { 'format': '%.0o', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%+.0o', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '% .0o', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%-.0o', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#.0o', 'args': [0], 'expected': '0', 'comment': '' },
+          { 'format': '%#3.0o', 'args': [0], 'expected': '  0', 'comment': '' },
+          { 'format': '%#3.1o', 'args': [0], 'expected': '  0', 'comment': '' },
+          { 'format': '%#3.2o', 'args': [0], 'expected': ' 00', 'comment': '' },
+          { 'format': '%#3.3o', 'args': [0], 'expected': '000', 'comment': '' },
+          { 'format': '%#3.4o', 'args': [0], 'expected': '0000', 'comment': '' },
+          { 'format': '%.0o', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%+.0o', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '% .0o', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%-.0o', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%#.0o', 'args': [1], 'expected': '01', 'comment': '' },
+          { 'format': '%#3.0o', 'args': [1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%#3.1o', 'args': [1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%#3.2o', 'args': [1], 'expected': ' 01', 'comment': '' },
+          { 'format': '%#3.3o', 'args': [1], 'expected': '001', 'comment': '' },
+          { 'format': '%#3.4o', 'args': [1], 'expected': '0001', 'comment': '' },
+          { 'format': '%#.5o', 'args': [012345], 'expected': '012345', 'comment': '' },
+          { 'format': '%#.5o', 'args': [012], 'expected': '00012', 'comment': '' },
+          { 'format': '%#4o', 'args': [17], 'expected': ' 021', 'comment': '' },
+          { 'format': '%#-4o', 'args': [17], 'expected': '021 ', 'comment': '' },
+          { 'format': '%-#4o', 'args': [17], 'expected': '021 ', 'comment': '' },
+          { 'format': '%#+4o', 'args': [17], 'expected': ' 021', 'comment': '' },
+          { 'format': '%# 4o', 'args': [17], 'expected': ' 021', 'comment': '' },
+          { 'format': '%#04o', 'args': [17], 'expected': '0021', 'comment': '' },
+          { 'format': '%#4.o', 'args': [16], 'expected': ' 020', 'comment': '' },
+          { 'format': '%#-4.o', 'args': [16], 'expected': '020 ', 'comment': '' },
+          { 'format': '%-#4.o', 'args': [16], 'expected': '020 ', 'comment': '' },
+          { 'format': '%#+4.o', 'args': [16], 'expected': ' 020', 'comment': '' },
+          { 'format': '%# 4.o', 'args': [16], 'expected': ' 020', 'comment': '' },
+          { 'format': '%#04.o', 'args': [16], 'expected': ' 020', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%#4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '%#-4.3o', 'args': [18], 'expected': '022 ', 'comment': '' },
+          { 'format': '%-#4.3o', 'args': [18], 'expected': '022 ', 'comment': '' },
+          { 'format': '%#+4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '%# 4.3o', 'args': [18], 'expected': ' 022', 'comment': '' },
+          { 'format': '%#04.3o', 'args': [18], 'expected': ' 022', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%#6.4o', 'args': [18], 'expected': '  0022', 'comment': '' },
+          { 'format': '%#-6.4o', 'args': [18], 'expected': '0022  ', 'comment': '' },
+          { 'format': '%-#6.4o', 'args': [18], 'expected': '0022  ', 'comment': '' },
+          { 'format': '%#+6.4o', 'args': [18], 'expected': '  0022', 'comment': '' },
+          { 'format': '%# 6.4o', 'args': [18], 'expected': '  0022', 'comment': '' },
+          { 'format': '%#06.4o', 'args': [18], 'expected': '  0022', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%q', 'args': [''], 'expected': '%q INVALID', 'comment': '' },
+          { 'format': '%r', 'args': [''], 'expected': '%r INVALID', 'comment': '' },
+          { 'format': '%s', 'args': [], 'expected': ' MISSING', 'comment': '' },
+          { 'format': ' %s', 'args': [], 'expected': '  MISSING', 'comment': '' },
+          { 'format': '%s', 'args': ['string'], 'expected': 'string', 'comment': '' },
+          { 'format': '%10s', 'args': ['string'], 'expected': '    string', 'comment': '' },
+          { 'format': '%+10s', 'args': ['string'], 'expected': '    string', 'comment': '' },
+          { 'format': '%#10s', 'args': ['string'], 'expected': '    string', 'comment': '' },
+          { 'format': '%010s', 'args': ['string'], 'expected': '0000string', 'comment': '' },
+          { 'format': '%0*s', 'args': [10, 'string'], 'expected': '0000string', 'comment': '' },
+          { 'format': '%-10s', 'args': ['string'], 'expected': 'string    ', 'comment': '' },
+          { 'format': '%3s', 'args': ['string'], 'expected': 'string', 'comment': '' },
+          { 'format': '%.3s', 'args': ['string'], 'expected': 'str', 'comment': '' },
+          { 'format': '%.*s', 'args': [3, 'string'], 'expected': 'str', 'comment': '' },
+          { 'format': '%.*s', 'args': [2, 'string'], 'expected': 'st', 'comment': '' },
+          { 'format': '%.*s', 'args': [1, 'string'], 'expected': 's', 'comment': '' },
+          { 'format': '%.*s', 'args': [0, 'string'], 'expected': '', 'comment': '' },
+          { 'format': '%.*s', 'args': [-1,'string'], 'expected': 'string', 'comment': '>negative precision to be ignored<' },
+          { 'format': '%3.*s', 'args': [3, 'string'], 'expected': 'str', 'comment': '' },
+          { 'format': '%3.*s', 'args': [2, 'string'], 'expected': ' st', 'comment': '' },
+          { 'format': '%3.*s', 'args': [1, 'string'], 'expected': '  s', 'comment': '' },
+          { 'format': '%3.*s', 'args': [0, 'string'], 'expected': '   ', 'comment': '' },
+          { 'format': '%3.*s', 'args': [-1,'string'], 'expected': 'string', 'comment': '>negative precision to be ignored<' },
+          { 'format': '%t', 'args': [''], 'expected': '%t INVALID', 'comment': '' },
+          { 'format': '%u', 'args': [bigNum], 'expected': '4294967295', 'comment': '' },
+          { 'format': '%+u', 'args': [bigNum], 'expected': '4294967295', 'comment': '' },
+          { 'format': '%#u', 'args': [bigNum], 'expected': '4294967295', 'comment': '' },
+          { 'format': '%12u', 'args': [bigNum], 'expected': '  4294967295', 'comment': '' },
+          { 'format': '%012u', 'args': [bigNum], 'expected': '004294967295', 'comment': '' },
+          { 'format': '%-12u', 'args': [bigNum], 'expected': '4294967295  ', 'comment': '' },
+          { 'format': '%-012u', 'args': [bigNum], 'expected': '4294967295  ', 'comment': '' },
+          { 'format': '%4u', 'args': [18], 'expected': '  18', 'comment': '' },
+          { 'format': '%4.3u', 'args': [18], 'expected': ' 018', 'comment': '' },
+          { 'format': '%-4.3u', 'args': [18], 'expected': '018 ', 'comment': '' },
+          { 'format': '%+4.3u', 'args': [18], 'expected': ' 018', 'comment': '' },
+          { 'format': '% 4.3u', 'args': [18], 'expected': ' 018', 'comment': '' },
+          { 'format': '%04.3u', 'args': [18], 'expected': ' 018', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%.3u', 'args': [18], 'expected': '018', 'comment': '' },
+          { skip: 'vector flag not supported', 'format': '%v', 'args': [''], 'expected': '%v INVALID', 'comment': '' },
+          { 'format': '%w', 'args': [''], 'expected': '%w INVALID', 'comment': '' },
+          { 'format': '%x', 'args': [bigNum], 'expected': 'ffffffff', 'comment': '' },
+          { 'format': '%+x', 'args': [bigNum], 'expected': 'ffffffff', 'comment': '' },
+          { 'format': '%#x', 'args': [bigNum], 'expected': '0xffffffff', 'comment': '' },
+          { 'format': '%10x', 'args': [bigNum], 'expected': '  ffffffff', 'comment': '' },
+          { 'format': '%010x', 'args': [bigNum], 'expected': '00ffffffff', 'comment': '' },
+          { 'format': '%-10x', 'args': [bigNum], 'expected': 'ffffffff  ', 'comment': '' },
+          { 'format': '%-010x', 'args': [bigNum], 'expected': 'ffffffff  ', 'comment': '' },
+          { 'format': '%0-10x', 'args': [bigNum], 'expected': 'ffffffff  ', 'comment': '' },
+          { 'format': '%4x', 'args': [18], 'expected': '  12', 'comment': '' },
+          { 'format': '%4.3x', 'args': [18], 'expected': ' 012', 'comment': '' },
+          { 'format': '%-4.3x', 'args': [18], 'expected': '012 ', 'comment': '' },
+          { 'format': '%+4.3x', 'args': [18], 'expected': ' 012', 'comment': '' },
+          { 'format': '% 4.3x', 'args': [18], 'expected': ' 012', 'comment': '' },
+          { 'format': '%04.3x', 'args': [18], 'expected': ' 012', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%.3x', 'args': [18], 'expected': '012', 'comment': '' },
+          { 'format': '%4X', 'args': [28], 'expected': '  1C', 'comment': '' },
+          { 'format': '%4.3X', 'args': [28], 'expected': ' 01C', 'comment': '' },
+          { 'format': '%-4.3X', 'args': [28], 'expected': '01C ', 'comment': '' },
+          { 'format': '%+4.3X', 'args': [28], 'expected': ' 01C', 'comment': '' },
+          { 'format': '% 4.3X', 'args': [28], 'expected': ' 01C', 'comment': '' },
+          { 'format': '%04.3X', 'args': [28], 'expected': ' 01C', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%.3X', 'args': [28], 'expected': '01C', 'comment': '' },
+          { 'format': '%.0x', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%+.0x', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '% .0x', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%-.0x', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#.0x', 'args': [0], 'expected': '', 'comment': '' },
+          { 'format': '%#3.0x', 'args': [0], 'expected': '   ', 'comment': '' },
+          { 'format': '%#3.1x', 'args': [0], 'expected': '  0', 'comment': '' },
+          { 'format': '%#3.2x', 'args': [0], 'expected': ' 00', 'comment': '' },
+          { 'format': '%#3.3x', 'args': [0], 'expected': '000', 'comment': '' },
+          { 'format': '%#3.4x', 'args': [0], 'expected': '0000', 'comment': '' },
+          { 'format': '%.0x', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%+.0x', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '% .0x', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%-.0x', 'args': [1], 'expected': '1', 'comment': '' },
+          { 'format': '%#.0x', 'args': [1], 'expected': '0x1', 'comment': '' },
+          { 'format': '%#3.0x', 'args': [1], 'expected': '0x1', 'comment': '' },
+          { 'format': '%#3.1x', 'args': [1], 'expected': '0x1', 'comment': '' },
+          { 'format': '%#3.2x', 'args': [1], 'expected': '0x01', 'comment': '' },
+          { 'format': '%#3.3x', 'args': [1], 'expected': '0x001', 'comment': '' },
+          { 'format': '%#3.4x', 'args': [1], 'expected': '0x0001', 'comment': '' },
+          { 'format': '%#.5x', 'args': [0x12345], 'expected': '0x12345', 'comment': '' },
+          { 'format': '%#.5x', 'args': [0x12], 'expected': '0x00012', 'comment': '' },
+          { 'format': '%#4x', 'args': [28], 'expected': '0x1c', 'comment': '' },
+          { 'format': '%#4.3x', 'args': [28], 'expected': '0x01c', 'comment': '' },
+          { 'format': '%#-4.3x', 'args': [28], 'expected': '0x01c', 'comment': '' },
+          { 'format': '%#+4.3x', 'args': [28], 'expected': '0x01c', 'comment': '' },
+          { 'format': '%# 4.3x', 'args': [28], 'expected': '0x01c', 'comment': '' },
+          { 'format': '%#04.3x', 'args': [28], 'expected': '0x01c', 'comment': '>0 flag with precision: no effect<' },
+          { 'format': '%#.3x', 'args': [28], 'expected': '0x01c', 'comment': '' },
+          { 'format': '%#6.3x', 'args': [28], 'expected': ' 0x01c', 'comment': '' },
+          { 'format': '%#-6.3x', 'args': [28], 'expected': '0x01c ', 'comment': '' },
+          { 'format': '%-#6.3x', 'args': [28], 'expected': '0x01c ', 'comment': '' },
+          { 'format': '%#+6.3x', 'args': [28], 'expected': ' 0x01c', 'comment': '' },
+          { 'format': '%+#6.3x', 'args': [28], 'expected': ' 0x01c', 'comment': '' },
+          { 'format': '%# 6.3x', 'args': [28], 'expected': ' 0x01c', 'comment': '' },
+          { 'format': '% #6.3x', 'args': [28], 'expected': ' 0x01c', 'comment': '' },
+          { 'format': '%0*x', 'args': [-10, bigNum], 'expected': 'ffffffff  ', 'comment': '' },
+        { 'format': '%.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%-.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%+.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '% .*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%0.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%.*x', 'args': [-3,0], 'expected': '0', 'comment': '' },
+        { 'format': '%-.*x', 'args': [-3,0], 'expected': '0', 'comment': '' },
+        { 'format': '%+.*x', 'args': [-3,0], 'expected': '0', 'comment': '' },
+        { 'format': '% .*x', 'args': [-3,0], 'expected': '0', 'comment': '' },
+        { 'format': '%0.*x', 'args': [-3,0], 'expected': '0', 'comment': '' },
+        { 'format': '%#.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%#-.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%#+.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%# .*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%#0.*x', 'args': [0,0], 'expected': '', 'comment': '' },
+        { 'format': '%#.*x', 'args': [-1,0], 'expected': '0', 'comment': '' },
+        { 'format': '%#-.*x', 'args': [-1,0], 'expected': '0', 'comment': '' },
+        { 'format': '%#+.*x', 'args': [-1,0], 'expected': '0', 'comment': '' },
+        { 'format': '%# .*x', 'args': [-1,0], 'expected': '0', 'comment': '' },
+        { 'format': '%#0.*x', 'args': [-1,0], 'expected': '0', 'comment': '' },
+        { 'format': '%y', 'args': [''], 'expected': '%y INVALID', 'comment': '' },
+        { 'format': '%z', 'args': [''], 'expected': '%z INVALID', 'comment': '' },
+        { 'format': '%2$d %1$d', 'args': [12, 34], 'expected': '34 12', 'comment': '' },
+        { 'format': '%*2$d', 'args': [12, 3], 'expected': ' 12', 'comment': '' },
+        { 'format': '%2$d %d', 'args': [12, 34], 'expected': '34 12', 'comment': '' },
+        { 'format': '%2$d %d %d', 'args': [12, 34], 'expected': '34 12 34', 'comment': '' },
+        { 'format': '%3$d %d %d', 'args': [12, 34, 56], 'expected': '56 12 34', 'comment': '' },
+        { 'format': '%2$*3$d %d', 'args': [12, 34, 3], 'expected': ' 34 12', 'comment': '' },
+        { 'format': '%*3$2$d %d', 'args': [12, 34, 3], 'expected': '%*3$2$d 12 INVALID', 'comment': '' },
+        { 'format': '%2$d', 'args': [12], 'expected': '0 MISSING', 'comment': '' },
+        { 'format': '%0$d', 'args': [12], 'expected': '%0$d INVALID', 'comment': '' },
+        { 'format': '%1$$d', 'args': [12], 'expected': '%1$$d INVALID', 'comment': '' },
+        { 'format': '%1$1$d', 'args': [12], 'expected': '%1$1$d INVALID', 'comment': '' },
+        { 'format': '%*2$*2$d', 'args': [12, 3], 'expected': '%*2$*2$d INVALID', 'comment': '' },
+        { 'format': '%*2*2$d', 'args': [12, 3], 'expected': '%*2*2$d INVALID', 'comment': '' },
+        { 'format': '%*2$1d', 'args': [12, 3], 'expected': '%*2$1d INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%0v2.2d', 'args': [''], 'expected': '', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vc,%d', 'args': [63, 64, 65], 'expected': '%vc,63 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%v%,%d', 'args': [63, 64, 65], 'expected': '%v%,63 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vd,%d', 'args': ["\x01", 2, 3], 'expected': '1,2', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vf,%d', 'args': [1, 2, 3], 'expected': '%vf,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vF,%d', 'args': [1, 2, 3], 'expected': '%vF,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%ve,%d', 'args': [1, 2, 3], 'expected': '%ve,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vE,%d', 'args': [1, 2, 3], 'expected': '%vE,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vg,%d', 'args': [1, 2, 3], 'expected': '%vg,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vG,%d', 'args': [1, 2, 3], 'expected': '%vG,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vp', 'args': [''], 'expected': '%vp INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vn', 'args': [''], 'expected': '%vn INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%vs,%d', 'args': [1, 2, 3], 'expected': '%vs,1 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%v_', 'args': [''], 'expected': '%v_ INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%v#x', 'args': [''], 'expected': '%v#x INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%v02x', 'args': ["\x66\x6f\x6f\012"], 'expected': '66.6f.6f.0a', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%#v.8b', 'args': ["\141\000\142"], 'expected': '0b01100001.00000000.0b01100010', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.0o', 'args': ["\001\000\002\000"], 'expected': '01.0.02.0', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%#v.1o', 'args': ["\001\000\002\000"], 'expected': '01.0.02.0', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%#v.4o', 'args': ["\141\000\142"], 'expected': '0141.0000.0142', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.3i', 'args': ["\141\000\142"], 'expected': '097.000.098', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.0x', 'args': ["\001\000\002\000"], 'expected': '0x1..0x2.', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%#v.1x', 'args': ["\001\000\002\000"], 'expected': '0x1.0.0x2.0', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%#v.2x', 'args': ["\141\000\142"], 'expected': '0x61.00.0x62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2X', 'args': ["\141\000\142"], 'expected': '0X61.00.0X62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.8b', 'args': ["\141\017\142"], 'expected': '0b01100001.0b00001111.0b01100010', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.4o', 'args': ["\141\017\142"], 'expected': '0141.0017.0142', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.3i', 'args': ["\141\017\142"], 'expected': '097.015.098', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2x', 'args': ["\141\017\142"], 'expected': '0x61.0x0f.0x62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2X', 'args': ["\141\017\142"], 'expected': '0X61.0X0F.0X62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.8b', 'args': ["][", "\141\000\142"], 'expected': '0b01100001][00000000][0b01100010', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.4o', 'args': ["][", "\141\000\142"], 'expected': '0141][0000][0142', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.3i', 'args': ["][", "\141\000\142"], 'expected': '097][000][098', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.2x', 'args': ["][", "\141\000\142"], 'expected': '0x61][00][0x62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.2X', 'args': ["][", "\141\000\142"], 'expected': '0X61][00][0X62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.8b', 'args': ["][", "\141\017\142"], 'expected': '0b01100001][0b00001111][0b01100010', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.4o', 'args': ["][", "\141\017\142"], 'expected': '0141][0017][0142', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.3i', 'args': ["][", "\141\017\142"], 'expected': '097][015][098', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.2x', 'args': ["][", "\141\017\142"], 'expected': '0x61][0x0f][0x62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#*v.2X', 'args': ["][", "\141\017\142"], 'expected': '0X61][0X0F][0X62', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.8b', 'args': ["\141\u1e01\000\142\u1e03"], 'expected': '0b01100001.0b1111000000001.00000000.0b01100010.0b1111000000011', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.4o', 'args': ["\141\u1e01\000\142\u1e03"], 'expected': '0141.017001.0000.0142.017003', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.3i', 'args': ["\141\u1e01\000\142\u1e03"], 'expected': '097.7681.000.098.7683', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2x', 'args': ["\141\u1e01\000\142\u1e03"], 'expected': '0x61.0x1e01.00.0x62.0x1e03', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2X', 'args': ["\141\u1e01\000\142\u1e03"], 'expected': '0X61.0X1E01.00.0X62.0X1E03', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.8b', 'args': ["\141\u1e01\017\142\u1e03"], 'expected': '0b01100001.0b1111000000001.0b00001111.0b01100010.0b1111000000011', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.4o', 'args': ["\141\u1e01\017\142\u1e03"], 'expected': '0141.017001.0017.0142.017003', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.3i', 'args': ["\141\u1e01\017\142\u1e03"], 'expected': '097.7681.015.098.7683', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2x', 'args': ["\141\u1e01\017\142\u1e03"], 'expected': '0x61.0x1e01.0x0f.0x62.0x1e03', 'comment': '>perl #39530<' },
+        { skip: 'vector flag not supported', 'format': '%#v.2X', 'args': ["\141\u1e01\017\142\u1e03"], 'expected': '0X61.0X1E01.0X0F.0X62.0X1E03', 'comment': '>perl #39530<' },
+        { 'format': '%V-%s', 'args': ["Hello"], 'expected': '%V-Hello INVALID', 'comment': '' },
+        { 'format': '%K %d %d', 'args': [13, 29], 'expected': '%K 13 29 INVALID', 'comment': '' },
+        { 'format': '%*.*K %d', 'args': [13, 29, 76], 'expected': '%*.*K 13 INVALID', 'comment': '' },
+        { 'format': '%4$K %d', 'args': [45, 67], 'expected': '%4$K 45 MISSING INVALID', 'comment': '' },
+        { 'format': '%d %K %d', 'args': [23, 45], 'expected': '23 %K 45 INVALID', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%*v*999\$d %d %d', 'args': [11, 22, 33], 'expected': '%*v*999\$d 11 22 INVALID', 'comment': '' },
+        { 'format': '%#b', 'args': [0], 'expected': '0', 'comment': '' },
+        { 'format': '%#o', 'args': [0], 'expected': '0', 'comment': '' },
+        { 'format': '%#x', 'args': [0], 'expected': '0', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%2147483647$v2d', 'args': [''], 'expected': '', 'comment': '' },
+        { skip: 'vector flag not supported', 'format': '%*2147483647$v2d', 'args': [''], 'expected': ' MISSING', 'comment': '' },
+        { 'format': '%.3X', 'args': [11], 'expected': '00B', 'comment': '>perl #83194: hex, zero-padded to 3 places<' },
+        { 'format': '%.*X', 'args': [3, 11], 'expected': '00B', 'comment': '>perl #83194: dynamic precision<' },
+        { skip: 'vector flag not supported', 'format': '%vX', 'args': ['012'], 'expected': '30.31.32', 'comment': '>perl #83194: vector flag<' },
+        { skip: 'vector flag not supported', 'format': '%*vX', 'args': [':', '012'], 'expected': '30:31:32', 'comment': '>perl #83194: vector flag + custom separator<' },
+        { skip: 'vector flag not supported', 'format': '%v.3X', 'args': ['012'], 'expected': '030.031.032', 'comment': '>perl #83194: vector flag + static precision<' },
+        { skip: 'vector flag not supported', 'format': '%v.*X', 'args': [3, '012'], 'expected': '030.031.032', 'comment': '>perl #83194: vector flag + dynamic precision<' },
+        { skip: 'vector flag not supported', 'format': '%*v.3X', 'args': [':', '012'], 'expected': '030:031:032', 'comment': '>perl #83194: vector flag + custom separator + static precision<' },
+        { skip: 'vector flag not supported', 'format': '%*v.*X', 'args': [':', 3, '012'], 'expected': '030:031:032', 'comment': '>perl #83194: vector flag + custom separator + dynamic precision<' },
+        { skip: 'vector flag not supported', 'format': '%vd', 'args': ["version"], 'expected': '118.101.114.115.105.111.110', 'comment': '>perl #102586: vector flag + "version"<' },
+
+          // Manually entered from perl 5.20.0: t/op/sprintf2.t
+          { format: '%.40g ', args: [0.01], expected: sprintf('%.40g', 0.01) + ' ', comment: 'the sprintf "%.<number>g" optimization' },
+          { format: '%.40f ', args: [0.01], expected: sprintf('%.40f', 0.01) + ' ', comment: 'the sprintf "%.<number>f" optimization' },
+          { format: '%1.1s',  args: ['\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410'], expected: '\u0410', comment: 'width & precision interplay with utf8 strings, length=1' },
+          { format: '%3.3s',  args: ['\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410'], expected: '\u0410\u0410\u0410', comment: 'width & precision interplay with utf8 strings, length=5' },
+          { format: '%5.5s',  args: ['\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410\u0410'], expected: '\u0410\u0410\u0410\u0410\u0410', comment: 'width & precision interplay with utf8 strings, length=5' },
+      ]);
+  });
+//]>
+</script>
+
+</head>
+<body>
+
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Format</th>
+<th>Args</th>
+<th>Expected</th>
+<th>Result</th>
+<th>Comment</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody id="sprintf-results">
+</tbody>
+</table>
+
+</body>
+</html>
