@@ -25,7 +25,7 @@ var Sprintf = (function() {
     return {
 
         "sprintf": function() {
-            if (!arguments || arguments.length < 1 || !RegExp) { return ""; }
+            if (arguments.length < 1 || !RegExp) { return ""; }
             var pieces = arguments[0].split('%');
             var res = pieces[0];
             var stash = { "at_index": 1 };
@@ -56,7 +56,7 @@ var Sprintf = (function() {
                 var type  = a[5];           //  char         - s, d, ...
                 var rest  = str.substr(a[0].length);
 
-                var prop = {}
+                var prop = {};
 
                 if (width && width == '*') {
                     if (stash.at_index >= args.length) { throw 'Missing argument in sprintf'; }
@@ -100,7 +100,7 @@ var Sprintf = (function() {
                 }
 
                 if (index) {
-                    index = parseInt(index.substr(0, index.length - 1), 10)
+                    index = parseInt(index.substr(0, index.length - 1), 10);
                 } else {
                     index = stash.at_index++;
                 }
